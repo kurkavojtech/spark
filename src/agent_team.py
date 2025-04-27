@@ -6,7 +6,8 @@ from agno.memory.v2.db.sqlite import SqliteMemoryDb
 from agno.memory.v2.memory import Memory
 from agno.storage.sqlite import SqliteStorage
 from agno.tools.firecrawl import FirecrawlTools
-from src.tools import read_name_days, get_current_datetime, get_day_of_week, get_movie_information
+from agno.tools.csv_toolkit import CsvTools
+from src.tools import get_current_datetime, get_day_of_week
 
 # Configuration
 MODEL_NAME = "gemini-2.5-flash-preview-04-17"
@@ -73,7 +74,12 @@ recipes_agent = Agent(
 movies_agent = Agent(
     name="Movies Agent",
     role="""You are a dedicated movie management assistant that helps users discover, track, and manage their movie watching experience. Your responsibilities include:
-        1. Extracting and storing movie information (title, genre, ranking, URL) from CSFD.cz links
+        1. Extracting and storing movie information from any movie website (including but not limited to CSFD.cz, IMDB.com, RottenTomatoes.com):
+           - Movie title
+           - Description/Plot
+           - Genre(s)
+           - Rating/Ranking
+           - URL (original source)
         2. Maintaining a curated list of movies to watch
         3. Providing personalized movie recommendations based on genres and preferences
         4. Managing watched/unwatched status of movies
@@ -81,12 +87,18 @@ movies_agent = Agent(
         6. Removing movies from the watch list once they're watched
         
         You should be proactive in gathering information and offering suggestions while keeping track of user preferences over time.
+        When processing movie URLs, use FirecrawlTools to extract relevant information from the webpage.
     """,
     model=Gemini(id=MODEL_NAME),
-    tools=[get_movie_information],
+    tools=[FirecrawlTools()],
     instructions=[
-        "When a CSFD.cz URL is shared, automatically fetch and offer to store the movie details",
-        "When storing a movie, always capture: title, genre, ranking, URL, and add a 'watched' status (default: false)",
+        "When any movie URL is shared, use FirecrawlTools to extract and process the webpage content",
+        "When extracting movie information, focus on finding:",
+        "- Movie title from page headers or main content",
+        "- Plot/description from main content sections",
+        "- Genre information typically found in metadata or movie details",
+        "- Rating/ranking information where available",
+        "When storing a movie, always capture: title, description, genre, ranking, URL, and add a 'watched' status (default: false)",
         "For movie recommendations: Consider previously watched movies, preferred genres, and user's viewing history",
         "Maintain and update a watchlist - add new movies and remove watched ones",
         "When user asks for movie suggestions, consider: available time, mood, preferred genres, and previous recommendations",
@@ -94,7 +106,8 @@ movies_agent = Agent(
         "Allow users to mark movies as watched and automatically remove them from the watch list",
         "Periodically remind users of unwatched movies in their list that match their preferences",
         "Help users search and filter their movie list by various criteria (genre, length, rating, etc.)",
-        "Keep track of user's favorite genres and preferences to improve future recommendations"
+        "Keep track of user's favorite genres and preferences to improve future recommendations",
+        "When processing non-English websites, try to extract information in its original language and provide translations when needed"
     ],
     enable_agentic_memory=True,
     memory=movies_memory
@@ -105,7 +118,7 @@ celebrations_agent = Agent(
     name="Celebrations Agent",
     role="""You are a dedicated celebrations assistant that helps users track and remember birthdays and name days. Your responsibilities include:
         1. Remembering people's birthdays and names when user tells you about them
-        2. Checking name days using the provided name days database
+        2. Checking name days from the name_days.csv file using CsvTools
         3. Proactively informing about upcoming celebrations (birthdays and name days) for:
            - Today
            - Tomorrow
@@ -121,12 +134,17 @@ celebrations_agent = Agent(
            - Any future or past date the user asks about
         
         You should be proactive in reminding about celebrations and maintaining accurate records of important dates.
+        When checking name days, use CsvTools to read and process the data from src/name_days.csv file.
     """,
     model=Gemini(id=MODEL_NAME),
-    tools=[read_name_days, get_current_datetime, get_day_of_week],
+    tools=[CsvTools(csvs=['data/name_days.csv']), get_current_datetime, get_day_of_week],
     instructions=[
         "When user mentions a person's birthday, store it with all provided context",
-        "Use the name_days tool to check for upcoming name days",
+        "Use CsvTools to read name days data from src/name_days.csv",
+        "When checking name days:",
+        "- Read the CSV file using CsvTools",
+        "- Look for matches in the name days data",
+        "- Process the dates in MM-DD format",
         "When checking celebrations, always emphasize today's and tomorrow's events",
         "Format dates consistently as YYYY-MM-DD for birthdays and MM-DD for name days",
         "When reporting upcoming celebrations:",
